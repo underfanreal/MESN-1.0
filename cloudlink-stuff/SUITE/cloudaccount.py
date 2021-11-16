@@ -23,7 +23,7 @@ except:
     sys.exit()
 
 try: # Authenticate session for use with verifying Scratchers using 2-Factor Authentication
-    session = s2py("MikeDEV_Test", "53415341")
+    session = s2py("", "") ## UNAME, PASS
     print("[ i ] Session ready.")
 except Exception as e:
     print("[ ! ] Session error! {0}".format(e))
