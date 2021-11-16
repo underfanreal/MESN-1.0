@@ -23,14 +23,14 @@ except:
     sys.exit()
 
 try: # Authenticate session for use with verifying Scratchers using 2-Factor Authentication
-    session = s2py("", "") ## UNAME, PASS
+    session = s2py(str(input("Enter a Scratch username: ")), str(input("Enter your password: ")))
     print("[ i ] Session ready.")
 except Exception as e:
     print("[ ! ] Session error! {0}".format(e))
     sys.exit()
 
 def on_new_packet(message): # message value is automatically converted into a dictionary datatype
-    print(message)
+    #print(message)
     if message["cmd"] == "pmsg":
         try:
             cmd = json.loads(message["val"])["cmd"]
@@ -291,15 +291,15 @@ def init_files():
                 print("[ i ] Deauthed user {0}.".format(user))
     print("[ i ] Initialized files.")
 
-init_files() # Initialize the directory
-while True:
+if __name__ == "__main__":
+    init_files() # Initialize the directory
     try:
         cl = CloudLink()
         cl.client("ws://127.0.0.1:3000/", on_new_packet = on_new_packet, on_connect = on_connect, on_error = error)
         while cl.mode == 2: # check for new authenticator packets and handle them
             pass 
         del cl
-    
+
     except KeyboardInterrupt:
         cl.stop() # Stops the client and exits
         sys.exit()
