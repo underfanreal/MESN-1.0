@@ -21,6 +21,6 @@ Meower is a social media platform written in Scratch 3.0 and Python, ported to H
 ## Contributing to the source
 1. Fork the repository.
 2. Follow the instructions above to load the source code.
-3. Make changes.
+3. Make changes (Use GitHub Desktop to upload large files).
 4. Make a pull request, and explain the changes you made.
 5. If it gets approved, the source will be merged.
