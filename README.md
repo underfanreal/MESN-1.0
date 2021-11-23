@@ -1,7 +1,7 @@
 # Meower
 Meower is a social media platform written in Scratch 3.0 and Python, ported to HTML for self-hosting.
 
-### [Try Beta 4.5.1](https://meower-media-co.github.io/Meower)
+### [Try Beta 4.5.1](https://meower.org/Meower)
 
 ## Changelog for 4.5.1
 1. Bug fixes.
