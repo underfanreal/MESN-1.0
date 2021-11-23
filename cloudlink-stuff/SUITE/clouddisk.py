@@ -14,6 +14,135 @@ old_userlist = ["%CD%"]
 auths = {}
 fsapi = filesysapi()
 
+def packetHandler(cmd, val, origin):
+    # Requisite commands for authentication / networking utilities
+    if cmd == "ping":
+        try:
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "pong", "origin": "%CD%"})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+    
+    if cmd == "returntoken":
+        try:
+            id = val["id"]
+            if val == "ERR":
+                cl.sendPacket({"cmd": "pmsg", "id":id, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+            else:
+                cl.sendPacket({"cmd": "pmsg", "id":id, "val": json.dumps({"authed": str(val["val"])}), "origin": "%CD%"})
+                auths[id]["valid"] = bool(val["val"])
+                if bool(val["val"]):
+                    print("[ i ] Adding {0} to auths".format(id))
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":id, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+    
+    if cmd == "checkauth":
+        try:
+            if origin in auths:
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({"authed": str(auths[origin]["valid"])}), "origin": "%CD%"})
+            else:
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({"authed": "False"}), "origin": "%CD%"})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+    
+    if cmd == "auth":
+        global userlist
+        try:
+            if "%CA%" in userlist:
+                if not origin in auths:
+                    auths[origin] = {"token": val, "valid": False}
+                    cl.sendPacket({"cmd": "verifytoken", "id":"%CA%", "val": {"origin": origin, "token": val}, "origin": "%CD%"})
+                else:
+                    if not auths[origin]["valid"]:
+                        auths[origin] = {"token": val, "valid": False}
+                        cl.sendPacket({"cmd": "verifytoken", "id":"%CA%", "val": {"origin": origin, "token": val}, "origin": "%CD%"})
+                    else:
+                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({"authed": "True"}), "origin": "%CD%"})
+            else:
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:AUTH_DOWN", "origin": "%CD%"})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+    
+    if cmd == "deauth":
+        try:
+            if origin in auths:
+                del auths[origin]
+                print("[ i ] Removing {0} from auths".format(origin))
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CD%"})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+
+    # Custom commands for this appserver
+    
+    if cmd == "getftpdir":
+        if (origin in auths) and (auths[origin]["valid"]):
+            try:
+                result, ddata = fsapi.lsdir(val)
+                read_directory(val, ddata)
+                if result:
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": ddata, "origin": "%CD%"})
+                else:
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+            except Exception as e:
+                print("[ ! ] Error: {0}".format(e))
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+        else:
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
+    
+    if cmd == "getftpfile":
+        if (origin in auths) and (auths[origin]["valid"]):
+            try:
+                result, ddata = fsapi.read(val)
+                ddata = str(ddata)
+                
+                if result:
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": ddata, "origin": "%CD%"})
+                else:
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+            except Exception as e:
+                print("[ ! ] Error: {0}".format(e))
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+        else:
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
+            
+    if cmd == "putftp":
+        # Check if the user is authenticated
+        if (origin in auths) and (auths[origin]["valid"]):
+            # Check if the val dict has the correct keys
+            if ("dir" in val) and ("filename" in val) and ("data" in val):
+                try:
+                    print("[ i ] Storing '" + str(val["filename"]) + "' in directory '" + str(val["dir"]) + "', storing " + str(len(str(val["data"]))) + " bytes")
+                    result = fsapi.write(fdir = val["dir"], fname = val["filename"], data = val["data"])
+                    if result:
+                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CD%"})
+                    else:
+                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:SAVE_ERR", "origin": "%CD%"})
+                except Exception as e:
+                    print("[ ! ] Error: {0}".format(e))
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+            else:
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:MISSING_PARAMS", "origin": "%CD%"})
+        else:
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
+    
+    if cmd == "ftpmkdir":
+        if (origin in auths) and (auths[origin]["valid"]):
+            try:
+                result = fsapi.mkdir(val)
+                if result:
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CD%"})
+                else:
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:MKDIR_ERR", "origin": "%CD%"})
+            except Exception as e:
+                print("[ ! ] Error: {0}".format(e))
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+        else:
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
+
 def read_directory(directory, items):
     # If a blank directory is used assume the root
     if directory == "":
@@ -67,144 +196,21 @@ def read_directory(directory, items):
             items.remove(item)
 
 def on_new_packet(message):
+    print(message)
     if message["cmd"] == "pmsg":
-        cmd = json.loads(message["val"])["cmd"]
-        if "val" in json.loads(message["val"]):
-            val = json.loads(message["val"])["val"]
-        else:
-            val = ""
-        origin = message["origin"]
-        
-        # Requisite commands for authentication / networking utilities
-        
-        if cmd == "ping":
-            try:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "pong", "origin": "%CD%"})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-        
-        if cmd == "returntoken":
-            id = json.loads(message["val"])["id"]
-            try:
-                if val == "ERR":
-                    cl.sendPacket({"cmd": "pmsg", "id":id, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-                else:
-                    cl.sendPacket({"cmd": "pmsg", "id":id, "val": json.dumps({"authed": str(val)}), "origin": "%CD%"})
-                    auths[id]["valid"] = bool(val)
-                    if bool(val):
-                        print("[ i ] Adding {0} to auths".format(id))
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":id, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-        
-        if cmd == "checkauth":
-            try:
-                if origin in auths:
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({"authed": str(auths[origin]["valid"])}), "origin": "%CD%"})
-                else:
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({"authed": "False"}), "origin": "%CD%"})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-        
-        if cmd == "auth":
-            global userlist
-            try:
-                if "%CA%" in userlist:
-                    if not origin in auths:
-                        auths[origin] = {"token": val, "valid": False}
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "I:CHECKING_TOKEN", "origin": "%CD%"})
-                        cl.sendPacket({"cmd": "pmsg", "id":"%CA%", "val": json.dumps({'cmd': "verifytoken", "val": val, "id": origin}), "origin": "%CD%"})
-                    else:
-                        if not auths[origin]["valid"]:
-                            auths[origin] = {"token": val, "valid": False}
-                            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "I:RECHECKING_TOKEN", "origin": "%CD%"})
-                            cl.sendPacket({"cmd": "pmsg", "id":"%CA%", "val": json.dumps({'cmd': "verifytoken", "val": val, "id": origin}), "origin": "%CD%"})
-                        else:
-                            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({"authed": "True"}), "origin": "%CD%"})
-                else:
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:AUTH_DOWN", "origin": "%CD%"})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-        
-        if cmd == "deauth":
-            try:
-                if origin in auths:
-                    del auths[origin]
-                    print("[ i ] Removing {0} from auths".format(origin))
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CD%"})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-    
-        # Custom commands for this appserver
-        
-        if cmd == "getftpdir":
-            if (origin in auths) and (auths[origin]["valid"]):
-                try:
-                    result, ddata = fsapi.lsdir(val)
-                    read_directory(val, ddata)
-                    if result:
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": ddata, "origin": "%CD%"})
-                    else:
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-                except Exception as e:
-                    print("[ ! ] Error: {0}".format(e))
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
+        try:
+            cmd = json.loads(message["val"])["cmd"]
+            if "val" in json.loads(message["val"]):
+                val = json.loads(message["val"])["val"]
             else:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
-        
-        if cmd == "getftpfile":
-            if (origin in auths) and (auths[origin]["valid"]):
-                try:
-                    result, ddata = fsapi.read(val)
-                    ddata = str(ddata)
-                    
-                    if result:
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": ddata, "origin": "%CD%"})
-                    else:
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-                except Exception as e:
-                    print("[ ! ] Error: {0}".format(e))
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-            else:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
-                
-        if cmd == "putftp":
-            # Check if the user is authenticated
-            if (origin in auths) and (auths[origin]["valid"]):
-                # Check if the val dict has the correct keys
-                if ("dir" in val) and ("filename" in val) and ("data" in val):
-                    try:
-                        print("[ i ] Storing '" + str(val["filename"]) + "' in directory '" + str(val["dir"]) + "', storing " + str(len(str(val["data"]))) + " bytes")
-                        result = fsapi.write(fdir = val["dir"], fname = val["filename"], data = val["data"])
-                        if result:
-                            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CD%"})
-                        else:
-                            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:SAVE_ERR", "origin": "%CD%"})
-                    except Exception as e:
-                        print("[ ! ] Error: {0}".format(e))
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-                else:
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:MISSING_PARAMS", "origin": "%CD%"})
-            else:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
-        
-        if cmd == "ftpmkdir":
-            if (origin in auths) and (auths[origin]["valid"]):
-                try:
-                    result = fsapi.mkdir(val)
-                    if result:
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CD%"})
-                    else:
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:MKDIR_ERR", "origin": "%CD%"})
-                except Exception as e:
-                    print("[ ! ] Error: {0}".format(e))
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CD%"})
-            else:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:NOT_AUTHED", "origin": "%CD%"})
+                val = ""
+            origin = message["origin"]
+            packetHandler(cmd, val, origin)
+        except Exception as e:
+            print("[ ! ] Error! {0}".format(e))
+            cmd = ""
+            data = ""
+            origin = ""
     
     elif message["cmd"] == "direct":
         if message["val"]["cmd"] == "vers":
@@ -213,7 +219,7 @@ def on_new_packet(message):
             print("[ i ] Server MOTD: {0}".format(message["val"]["val"]))
     
     elif message["cmd"] == "ulist":
-        global old_userlist
+        global old_userlist, userlist
         userlist = message["val"].split(";")
         del userlist[-1]
         for id in old_userlist:
@@ -222,6 +228,12 @@ def on_new_packet(message):
                     del auths[id]
                     print("[ i ] Removing {0} from auths".format(id))
         old_userlist = userlist
+    
+    else:
+        cmdlist = ["clear", "setid", "gmsg", "pmsg", "gvar", "pvar", "ds", "ulist"]
+        if ("cmd" in message) and ("val" in message) and ("origin" in message):
+            if not message["cmd"] in cmdlist:
+                packetHandler(message["cmd"], message["val"], message["origin"])
 
 def on_connect():
     cl.sendPacket({"cmd": "setid", "val": "%CD%"})
@@ -247,14 +259,13 @@ def init_files():
 
 if __name__ == "__main__":
     init_files() # Initialize the directory
-    while True:
-        try:
-            cl = CloudLink() # instanciate the CloudLink module
-            cl.client("ws://127.0.0.1:3000", on_new_packet = on_new_packet, on_connect = on_connect, on_error = on_error) #define callbacks, and connect to server
-            while cl.mode == 2:
-                pass 
-            del cl
-    
-        except KeyboardInterrupt:
-            cl.stop() # Stops the client and exits
-            sys.exit()
+    try:
+        cl = CloudLink() # instanciate the CloudLink module
+        cl.client("ws://127.0.0.1:3000", on_new_packet = on_new_packet, on_connect = on_connect, on_error = on_error) #define callbacks, and connect to server
+        while cl.mode == 2:
+            pass 
+        del cl
+
+    except KeyboardInterrupt:
+        cl.stop() # Stops the client and exits
+        sys.exit()

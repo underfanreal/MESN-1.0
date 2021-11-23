@@ -3,7 +3,7 @@
 # CloudLink 3.0 - CloudAccount
 
 from cloudlink import CloudLink
-from scratch2py import s2py
+from scratch2py import Scratch2Py
 import time
 import os
 import json
@@ -23,14 +23,111 @@ except:
     sys.exit()
 
 try: # Authenticate session for use with verifying Scratchers using 2-Factor Authentication
-    session = s2py(str(input("Enter a Scratch username: ")), str(input("Enter your password: ")))
+    global s2py
+    s2py = Scratch2Py(str(input("Enter a Scratch username: ")), str(input("Enter your password: ")))
     print("[ i ] Session ready.")
 except Exception as e:
     print("[ ! ] Session error! {0}".format(e))
     sys.exit()
 
+def packetHandler(cmd, data, origin):
+    if cmd == "ping":
+        try:
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "pong", "origin": "%CA%"})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+    
+    if cmd == "auth":
+        try:
+            authenticate({"mode": "pswd", "key": data, "origin": origin})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+    
+    if cmd == "verifytoken": # for CloudLink Suite
+        try:
+            id = data["origin"]
+            print("[ i ] Service checking token for user {0}".format(id))
+            result = ((userExists(id) and userAuthed(id)) and (str(readUserFile(str(id))['latestToken']) == data["token"]))
+            cl.sendPacket({'cmd': "returntoken", "val": {"id": id, "val": result}, "id": origin, "origin": "%CA%"})
+        except Exception as e: 
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({'cmd': "returntoken", "val": {"id": id, "val": "ERR"}, "id": origin, "origin": "%CA%"})
+        
+    if cmd == "auth2fa": # create a key, store it into tokencache, send key to user to use in the authenticator
+        fresh_key_gen = False
+        keys = os.listdir("./ACCOUNT/TOKENCACHE")
+        while fresh_key_gen == False:
+            key = gen_key()
+            fresh_key_gen = "{0}.key".format(str(key)) not in keys
+        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'key': str(key)}), "origin": "%CA%"})
+        token_tmp = open("./ACCOUNT/TOKENCACHE/{0}.key".format(str(key)), "w")
+        token_tmp.write(str(origin))
+        token_tmp.close()
+    
+    if cmd == "deauth":
+        if userExists(str(origin)):
+            if userAuthed(str(origin)):
+                try:
+                    pswd = str(readUserFile(str(origin))['pswd'])
+                    writeUserFile(str(origin), {"isAuth": False, "latestToken": "", "pswd": pswd})
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CA%"})
+                    print("[ i ] {0} has been deauthed.".format(origin))
+                except Exception as e:
+                    print("[ ! ] Error: {0}".format(e))
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+            else:
+                print(origin, "is not authed")
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CA%"})
+        else:
+            print(origin, "does not exist")
+    
+    if cmd == "checkauth":
+        try:
+            if userExists(origin):
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'exists': True, 'authed': userAuthed(origin)}), "origin": "%CA%"})
+            else:
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'exists': False}), "origin": "%CA%"})
+        except Exception as e:
+            print("[ ! ] Error: {0}".format(e))
+            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+    
+    if cmd == "checkkeys":
+        if not userAuthed(origin):
+            print("[ i ] Fetching auth data...")
+            try:
+                global session, s2py
+                authData = session.readCloudVar("AUTH", 10)
+                userKeyCheck = False
+                if authData == "Sorry, there was an error.":
+                    print("[ ! ] Authenticator fetch error.")
+                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+                    userKeyCheck = True
+                else:
+                    for item in authData:
+                        try:
+                            worked = authenticate({"mode": "2fa", "key": item['value'], "user": item['user'], "origin": origin})
+                            if worked == "authed":
+                                return
+                            else:
+                                if not worked: # Only becomes a false value if the authentication fails due to username missmatch
+                                    userKeyCheck = True
+                                else:
+                                    if not userKeyCheck:
+                                        userKeyCheck = userAuthed(origin)
+                        except Exception as e: 
+                            print("[ ! ] Error: {0}".format(e))
+                            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+                            return
+                    if not userKeyCheck:
+                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:RETRY", "origin": "%CA%"})
+            except Exception as e:
+                print("[ ! ] Error: {0}".format(e))
+                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
+
 def on_new_packet(message): # message value is automatically converted into a dictionary datatype
-    #print(message)
+    print(message)
     if message["cmd"] == "pmsg":
         try:
             cmd = json.loads(message["val"])["cmd"]
@@ -39,105 +136,13 @@ def on_new_packet(message): # message value is automatically converted into a di
             else:
                 data = ""
             origin = message["origin"]
-            #print(cmd, data, origin)
-        except Exception:
+            packetHandler(cmd, data, origin)
+        except Exception as e:
+            print("[ ! ] Error! {0}".format(e))
             cmd = ""
             data = ""
             origin = ""
         
-        if cmd == "ping":
-            try:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "pong", "origin": "%CA%"})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-        
-        if cmd == "auth":
-            try:
-                authenticate({"mode": "pswd", "key": data, "origin": origin})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-        
-        if cmd == "verifytoken": # for CloudLink Suite
-            id = json.loads(message["val"])["id"]
-            print("[ i ] Service checking token for user {0}".format(id))
-            try:
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'cmd': "returntoken", "val": ((userExists(id) and userAuthed(id)) and (str(readUserFile(str(id))['latestToken']) == data)), "id": id}), "origin": "%CA%"})
-            except Exception as e: 
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val":  json.dumps({'cmd': "returntoken", "val": "ERR", "id": id}), "origin": "%CA%"})
-            
-        if cmd == "auth2fa": # create a key, store it into tokencache, send key to user to use in the authenticator
-            fresh_key_gen = False
-            keys = os.listdir("./ACCOUNT/TOKENCACHE")
-            while fresh_key_gen == False:
-                key = gen_key()
-                fresh_key_gen = "{0}.key".format(str(key)) not in keys
-            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'key': str(key)}), "origin": "%CA%"})
-            token_tmp = open("./ACCOUNT/TOKENCACHE/{0}.key".format(str(key)), "w")
-            token_tmp.write(str(origin))
-            token_tmp.close()
-        
-        if cmd == "deauth":
-            if userExists(str(origin)):
-                if userAuthed(str(origin)):
-                    try:
-                        pswd = str(readUserFile(str(origin))['pswd'])
-                        writeUserFile(str(origin), {"isAuth": False, "latestToken": "", "pswd": pswd})
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CA%"})
-                        print("[ i ] {0} has been deauthed.".format(origin))
-                    except Exception as e:
-                        print("[ ! ] Error: {0}".format(e))
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-                else:
-                    print(origin, "is not authed")
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "OK", "origin": "%CA%"})
-            else:
-                print(origin, "does not exist")
-        
-        if cmd == "checkauth":
-            try:
-                if userExists(origin):
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'exists': True, 'authed': userAuthed(origin)}), "origin": "%CA%"})
-                else:
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": json.dumps({'exists': False}), "origin": "%CA%"})
-            except Exception as e:
-                print("[ ! ] Error: {0}".format(e))
-                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-        
-        if cmd == "checkkeys":
-            if not userAuthed(origin):
-                print("[ i ] Fetching auth data...")
-                try:
-                    authData = session.readCloudVars("AUTH", 10)
-                    userKeyCheck = False
-                    if authData == "Sorry, there was an error.":
-                        print("[ ! ] Authenticator fetch error.")
-                        cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-                        userKeyCheck = True
-                    else:
-                        for item in authData:
-                            try:
-                                worked = authenticate({"mode": "2fa", "key": item['value'], "user": item['user'], "origin": origin})
-                                if worked == "authed":
-                                    return
-                                else:
-                                    if not worked: # Only becomes a false value if the authentication fails due to username missmatch
-                                        userKeyCheck = True
-                                    else:
-                                        if not userKeyCheck:
-                                            userKeyCheck = userAuthed(origin)
-                            except Exception as e: 
-                                print("[ ! ] Error: {0}".format(e))
-                                cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-                                return
-                        if not userKeyCheck:
-                            cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:RETRY", "origin": "%CA%"})
-                except Exception as e:
-                    print("[ ! ] Error: {0}".format(e))
-                    cl.sendPacket({"cmd": "pmsg", "id":origin, "val": "E:INTERNAL_SERVER_ERR", "origin": "%CA%"})
-    
     elif message["cmd"] == "direct":
         if message["val"]["cmd"] == "vers":
             print("[ i ] Server version: {0}".format(message["val"]["val"]))
@@ -155,6 +160,12 @@ def on_new_packet(message): # message value is automatically converted into a di
                     writeUserFile(id, {"isAuth": False, "latestToken": "", "pswd": readUserFile(id)['pswd']})
                     print("[ i ] {0} has been deauthed.".format(id))
         old_userlist = userlist
+    
+    else:
+        cmdlist = ["clear", "setid", "gmsg", "pmsg", "gvar", "pvar", "ds", "ulist"]
+        if ("cmd" in message) and ("val" in message) and ("origin" in message):
+            if not message["cmd"] in cmdlist:
+                packetHandler(message["cmd"], message["val"], message["origin"])
 
 def on_connect():
     cl.sendPacket({"cmd": "setid", "val": "%CA%"})
@@ -162,7 +173,8 @@ def on_connect():
     if not linked_to_auth:
         print("[ i ] Connected to main link, trying to connect to authenticator...")
         try:
-            session.cloudConnect("561076533")
+            global session, s2py
+            session = s2py.scratchConnect("561076533")
             print("[ i ] Session connected to authenticator.")
             linked_to_auth = True
         except Exception as e:

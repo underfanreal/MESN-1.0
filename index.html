@@ -153,7 +153,7 @@
   </div>
 
   <div id="loading" class="screen">
-    
+    <h1 class="loading-text">Getting ready for awesomeness...</h1>
     
     <div class="progress-bar-outer"><div class="progress-bar-inner" id="loading-inner"></div></div>
   </div>
@@ -326,17 +326,18 @@
       });
 
       if (typeof ScaffoldingAddons !== 'undefined') {
-        ScaffoldingAddons.run(scaffolding, {"gamepad":false,"pointerlock":false,"specialCloudBehaviors":false,"pause":{"enabled":true}});
+        ScaffoldingAddons.run(scaffolding, {"gamepad":false,"pointerlock":false,"specialCloudBehaviors":false,"pause":true});
       }
 
-      for (const extension of ["https://mikedev101.github.io/cloudlink/B3-0.js"]) {
+      for (const extension of []) {
         vm.extensionManager.loadExtensionURL(extension);
       }
+
     } catch (e) {
       handleError(e);
     }
-
   </script>
+  <script></script>
   <script>
     const getProjectData = () => new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();

@@ -1,22 +1,27 @@
-import requests
-import re
-import websocket
-import json
-import time
-import logging
 try:
-    import wsaccel
-except ImportError:
-    pass
-import sys
-import ScratchEncoder
-ws = websocket.WebSocket()
-encoder = ScratchEncoder.Encoder()
+    import re
+    import os
+    import json
+    import time
+    import logging
+    import sys
+    import requests
+    import websocket
+except ModuleNotFoundError as e:
+    os.chdir(os.getcwd())
+    os.system('pip install -r requirements.txt')
+try:
+    ws = websocket.WebSocket()
+except:
+    os.system('pip install --force-reinstall websocket-client')
+logging.basicConfig(filename='s2py.log', level=logging.INFO)
 
 
-class s2py():
-
+class Scratch2Py():
     def __init__(self, username, password):
+        self.chars = """AabBCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789 -_`~!@#$%^&*()+=[];:'"\|,.<>/?}{"""
+        global uname
+        uname = username
         self.username = username
         self.password = password
         self.headers = {
@@ -36,6 +41,8 @@ class s2py():
             self.sessionId = re.search(
                 '\"(.*)\"', request.headers['Set-Cookie']).group()
             self.token = request.json()[0]["token"]
+            global sessionId
+            sessionId = self.sessionId
             headers = {
                 "x-requested-with": "XMLHttpRequest",
                 "Cookie": "scratchlanguage=en;permissions=%7B%7D;",
@@ -63,305 +70,723 @@ class s2py():
             }
 
     def decode(self, text):
-        return encoder.decode(text)
-    
+        decoded = ""
+        text = str(text)
+        y = 0
+        for i in range(0, len(text)//2):
+            x = self.chars[int(str(text[y])+str(text[int(y)+1]))-1]
+            decoded = str(decoded)+str(x)
+            y += 2
+        return decoded
+
     def encode(self, text):
-        return encoder.encode(text)
-    
-    def getStats(self, id, stat):
-        if stat == "loves" or stat == "faves" or stat == "views" or stat == "remixes":
-            if stat == "loves":
-                r = requests.get(
-                    "https://api.scratch.mit.edu/projects/"+str(id))
-                data = r.json()
-                return data['stats']['loves']
-            else:
-                if stat == "faves":
+        encoded = ""
+        length = int(len(text))
+        for i in range(0,length):
+            try:
+                x = int(self.chars.index(text[i])+1)
+                if x < 10:
+                    x = str(0)+str(x)
+                encoded = encoded + str(x)
+            except ValueError:
+                logging.error('Character not supported')
+        return encoded
+    class project:
+        def __init__(self, id):
+            self.id = id
+
+        def getStats(self, stat):
+            if stat == "loves" or stat == "faves" or stat == "views" or stat == "remixes":
+                if stat == "loves":
                     r = requests.get(
-                        "https://api.scratch.mit.edu/projects/"+str(id))
+                        "https://api.scratch.mit.edu/projects/"+str(self.id))
                     data = r.json()
-                    return data['stats']['favorites']
+                    return data['stats']['loves']
                 else:
-                    if stat == "remixes":
+                    if stat == "faves":
                         r = requests.get(
-                            "https://api.scratch.mit.edu/projects/"+str(id))
+                            "https://api.scratch.mit.edu/projects/"+str(self.id))
                         data = r.json()
-                        return data['stats']['remixes']
+                        return data['stats']['favorites']
                     else:
-                        if stat == "views":
+                        if stat == "remixes":
                             r = requests.get(
-                                "https://api.scratch.mit.edu/projects/"+str(id))
+                                "https://api.scratch.mit.edu/projects/"+str(self.id))
                             data = r.json()
-                            return data['stats']['views']
-
-    def getProjects(self, user):
-        r = requests.get(
-            "https://api.scratch.mit.edu/users/"+str(user)+"/projects")
-        data = r.json()
-        titles = []
-        for i in data:
-            x = i['title']
-            y = i['id']
-            titles.append('ID: ' + str(y))
-            titles.append('Title: ' + str(x))
-        return titles
-
-    def getProjectComments(self, id):
-        uname = requests.get(
-            "https://api.scratch.mit.edu/projects/"+str(id)).json()
-        if uname != {"code": "NotFound", "message": ""}:
-            uname = uname['author']['username']
-            data = requests.get("https://api.scratch.mit.edu/users/" +
-                                str(uname)+"/projects/"+str(id)+"/comments").json()
-            if data != {"code": "ResourceNotFound", "message": "/users/"+str(uname)+"/projects/175/comments does not exist"} and data != {"code": "NotFound", "message": ""}:
-                comments = []
-                x = ""
-                for i in data:
-                    if "content" in i:
-                        x = i['content']
-                    else:
-                        if "image" in i:
-                            x = i['image']
+                            return data['stats']['remixes']
                         else:
-                            x = "None"
-                        
+                            if stat == "views":
+                                r = requests.get(
+                                    "https://api.scratch.mit.edu/projects/"+str(self.id))
+                                data = r.json()
+                                return data['stats']['views']
 
-                    comments.append(x)
-                data = json.dumps(comments)
-                return data
+        def getComments(self):
+            uname = requests.get(
+                "https://api.scratch.mit.edu/projects/"+str(self.id)).json()
+            if uname != {"code": "NotFound", "message": ""}:
+                uname = uname['author']['username']
+                data = requests.get("https://api.scratch.mit.edu/users/" +
+                                    str(uname)+"/projects/"+str(self.id)+"/comments").json()
+                comments = []
+                if data != {"code": "ResourceNotFound", "message": "/users/"+str(uname)+"/projects/175/comments does not exist"} and data != {"code": "NotFound", "message": ""}:
+                    x = ""
+                    for i in data:
+                        if "content" in i:
+                            x = i['content']
+                        else:
+                            if "image" in i:
+                                x = i['image']
+                            else:
+                                x = "None"
+                        comments.append(
+                            str('Username: '+str(uname))+(str(', Content: ')+str(x)))
+                    return data
 
-    def inviteCurator(self, sid, user):
-        self.headers["referer"] = (
-            "https://scratch.mit.edu/studios/" + str(sid) + "/curators/")
-        requests.put("https://scratch.mit.edu/site-api/users/curators-in/" +
-                     str(sid) + "/invite_curator/?usernames=" + user, headers=self.headers,)
+        def getInfo(self):
+            r = requests.get(
+                'https://api.scratch.mit.edu/projects/'+str(self.id)
+            ).json()
+            return r
 
-    def postProjectComment(self, pid, content, parent_id="", commentee_id=""):
-        self.headers['referer'] = (
-            "https://scratch.mit.edu/projects/" + str(pid)
-        )
-        data = {
-            "commentee_id": commentee_id,
-            "content": content,
-            "parent_id": parent_id,
-        }
-        return requests.post(
-            "https://api.scratch.mit.edu/proxy/comments/project/"
-            + str(pid) + "/",
-            headers=self.headers,
-            data=json.dumps(data),
-        )
+        def fetchAssets(self, type='img'):
+            '''
+            You may have problems with fetching assets since some projects may not have any assets, or are fetched as binary code and not JSON
+            '''
 
-    def postStudioComment(self, sid, content, parent_id="", commentee_id=""):
-        self.headers['referer'] = (
-            "https://scratch.mit.edu/studios/" + str(sid) + "/comments/"
-        )
-        data = {
-            "commentee_id": commentee_id,
-            "content": content,
-            "parent_id": parent_id,
-        }
-        return requests.post(
-            "https://scratch.mit.edu/site-api/comments/gallery/"
-            + str(sid)
-            + "/add/",
-            headers=self.headers,
-            data=json.dumps(data),
-        )
+            r = json.loads(requests.get(
+                'https://projects.scratch.mit.edu/'+str(self.id)
+            ).text.encode('utf-8'))
 
-    def favorite(self, id):
-        self.headers['referer'] = "https://scratch.mit.edu/projects/"+str(id)
-        return requests.post(
-            "https://api.scratch.mit.edu/proxy/projects/"
-            + str(id)
-            + "/favorites/user/"
-            + self.username,
-            headers=self.headers,
-        ).json()
+            assets = []
+            for i in range(len(r['targets'])):
+                if type == 'img':
+                    assets.append('https://cdn.assets.scratch.mit.edu/internalapi/asset/' +
+                                  str(r['targets'][i]['costumes'][0]['md5ext'])+'/get')
+                elif type == 'snd':
+                    assets.append('https://cdn.assets.scratch.mit.edu/internalapi/asset/' +
+                                  str(r['targets'][i]['sounds'][0]['md5ext'])+'/get')
+            return assets
 
-    def addStudioProject(self, sid, pid):
-        self.headers['referer'] = "https://scratch.mit.edu/projects/"+str(pid)
-        return requests.post("https://api.scratch.mit.edu/studios/"+str(sid)+"/project/"+str(pid), headers=self.headers)
+    class studioSession:
+        def __init__(self, sid):
+            self.headers = {
+                "x-csrftoken": "a",
+                "x-requested-with": "XMLHttpRequest",
+                "Cookie": "scratchcsrftoken=a;scratchlanguage=en;",
+                "referer": "https://scratch.mit.edu",
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36"
+            }
+            self.sid = sid
 
-    def unfavorite(self, id):
-        self.headers['referer'] = "https://scratch.mit.edu/projects/"+str(id)
-        return requests.delete(
-            "https://api.scratch.mit.edu/proxy/projects/"
-            + str(id)
-            + "/favorites/user/"
-            + self.username,
-            headers=self.headers,
-        ).json()
+        def inviteCurator(self, user):
+            self.headers["referer"] = (
+                "https://scratch.mit.edu/studios/" + str(self.sid) + "/curators/")
+            requests.put("https://scratch.mit.edu/site-api/users/curators-in/" +
+                         str(self.sid) + "/invite_curator/?usernames=" + user, headers=self.headers)
 
-    def love(self, id):
-        self.headers['referer'] = "https://scratch.mit.edu/projects/"+str(id)
-        return requests.post(
-            "https://api.scratch.mit.edu/proxy/projects/"
-            + str(id)
-            + "/loves/user/"
-            + self.username,
-            headers=self.headers,
-        ).json()
+        def addStudioProject(self, pid):
+            self.headers['referer'] = "https://scratch.mit.edu/projects/" + \
+                str(pid)
+            return requests.post("https://api.scratch.mit.edu/studios/"+str(self.sid)+"/project/"+str(pid), headers=self.headers)
 
-    def unlove(self, id):
-        self.headers['referer'] = "https://scratch.mit.edu/projects/"+str(id)
-        return requests.delete(
-            "https://api.scratch.mit.edu/proxy/projects/"
-            + str(id)
-            + "/loves/user/"
-            + self.username,
-            headers=self.headers,
-        ).json()
+        def postComment(self, content, parent_id="", commentee_id=""):
+            self.headers['referer'] = (
+                "https://scratch.mit.edu/studios/" +
+                str(self.sid) + "/comments/"
+            )
+            data = {
+                "commentee_id": commentee_id,
+                "content": content,
+                "parent_id": parent_id,
+            }
+            return requests.post(
+                "https://scratch.mit.edu/site-api/comments/gallery/"
+                + str(self.sid)
+                + "/add/",
+                headers=self.headers,
+                data=json.dumps(data),
+            )
 
-    def followStudio(self, id):
-        self.headers['referer'] = "https://scratch.mit.edu/studios/"+str(id)
-        return requests.put(
-            "https://scratch.mit.edu/site-api/users/bookmarkers/"
-            + str(id)
-            + "/remove/?usernames="
-            + self.username,
-            headers=self.headers,
-        ).json()
+        def getComments(self):
+            r = requests.get(
+                "https://api.scratch.mit.edu/studios/"+str(self.sid)+"/comments")
+            data = r.json()
+            comments = []
+            for i in data:
+                x = i['content']
+                comments.append(x)
+            return json.dumps(comments)
 
-    def unfollowStudio(self, id):
-        self.headers['referer'] = "https://scratch.mit.edu/studios/"+str(id)
-        return requests.put(
-            "https://scratch.mit.edu/site-api/users/bookmarkers/"
-            + str(id)
-            + "/remove/?usernames="
-            + self.username,
-            headers=self.headers,
-        ).json()
+        def follow(self):
+            self.headers['referer'] = "https://scratch.mit.edu/studios/" + \
+                str(self.sid)
+            return requests.put(
+                "https://scratch.mit.edu/site-api/users/bookmarkers/"
+                + str(self.sid)
+                + "/remove/?usernames="
+                + self.username,
+                headers=self.headers,
+            ).json()
 
-    def getStudioComments(self, id):
-        r = requests.get(
-            "https://api.scratch.mit.edu/studios/"+str(id)+"/comments")
-        data = r.json()
-        comments = []
-        for i in data:
-            x = i['content']
-            comments.append(x)
-        return json.dumps(comments)
+        def unfollow(self):
+            self.headers['referer'] = "https://scratch.mit.edu/studios/" + \
+                str(self.sid)
+            return requests.put(
+                "https://scratch.mit.edu/site-api/users/bookmarkers/"
+                + str(id)
+                + "/remove/?usernames="
+                + self.username,
+                headers=self.headers,
+            ).json()
 
-    def followUser(self, username):
-        self.headers['referer'] = "https://scratch.mit.edu/users/" + \
-            str(username)+"/"
-        print(self.headers)
-        return requests.put(
-            "https://scratch.mit.edu/site-api/users/followers/"
-            + username
-            + "/add/?usernames="
-            + self.username,
-            headers=self.headers,
-        ).json()
+    class projectSession:
+        def __init__(self, pid):
+            self.headers = {
+                "x-csrftoken": "a",
+                "x-requested-with": "XMLHttpRequest",
+                "Cookie": "scratchcsrftoken=a;scratchlanguage=en;",
+                "referer": "https://scratch.mit.edu",
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36"
+            }
+            self.pid = pid
 
-    def unfollowUser(self, username):
-        return requests.put(
-            "https://scratch.mit.edu/site-api/users/followers/"
-            + username
-            + "/remove/?usernames="
-            + self.username,
-            headers=self.headers,
-        ).json()
+        def share(self):
+            self.headers["referer"] = (
+                "https://scratch.mit.edu/projects/"+str(self.pid)
+            )
+            return requests.put("https://api.scratch.mit.edu/proxy/projects/"+str(self.pid)+"/share", headers=self.headers)
 
-    def toggleCommenting(self):
-        self.headers['referer'] = "https://scratch.mit.edu/users/" + \
-            str(self.username)
-        return requests.post(
-            "https://scratch.mit.edu/site-api/comments/user/" +
-            str(self.username)+"/toggle-comments/",
-            headers=self.headers,
-        )
+        def unshare(self):
+            self.headers["referer"] = (
+                "https://scratch.mit.edu/projects/"+str(self.pid)
+            )
+            return requests.put("https://api.scratch.mit.edu/proxy/projects/"+str(self.pid)+"/unshare", headers=self.headers)
 
-    def unfollowPost(self, postid):
-        self.headers['referer'] = "https://scratch.mit.edu/discuss/topic/" + \
-            str(postid)
-        return requests.post("https://scratch.mit.edu/discuss/subscription/topic/"+str(postid)+"/delete/", headers=self.headers)
+        def favorite(self):
+            self.headers['referer'] = "https://scratch.mit.edu/projects/" + \
+                str(self.pid)
+            return requests.post(
+                "https://api.scratch.mit.edu/proxy/projects/"
+                + str(self.pid)
+                + "/favorites/user/"
+                + self.username,
+                headers=self.headers,
+            ).json()
 
-    def followPost(self, postid):
-        self.headers['referer'] = "https://scratch.mit.edu/discuss/topic/" + \
-            str(postid)
-        return requests.post("https://scratch.mit.edu/discuss/subscription/topic/"+str(postid)+"/add/", headers=self.headers)
+        def unfavorite(self):
+            self.headers['referer'] = "https://scratch.mit.edu/projects/" + \
+                str(self.pid)
+            return requests.delete(
+                "https://api.scratch.mit.edu/proxy/projects/"
+                + str(self.pid)
+                + "/favorites/user/"
+                + self.username,
+                headers=self.headers,
+            ).json()
 
-    def checkUserExists(self, user):
-        return requests.get("https://api.scratch.mit.edu/accounts/checkusername/"+str(user)).json() == {"username": user, "msg": "username exists"}
+        def love(self):
+            self.headers['referer'] = "https://scratch.mit.edu/projects/" + \
+                str(self.pid)
+            return requests.post(
+                "https://api.scratch.mit.edu/proxy/projects/"
+                + str(self.pid)
+                + "/loves/user/"
+                + self.username,
+                headers=self.headers,
+            ).json()
 
-    def getUserMessagesCount(self, user):
-        self.headers['referer'] = "https://scratch.mit.edu"
-        return requests.get("https://api.scratch.mit.edu/users/"+str(user)+"/messages/count").json()['count']
+        def unlove(self):
+            self.headers['referer'] = "https://scratch.mit.edu/projects/" + \
+                str(self.pid)
+            return requests.delete(
+                "https://api.scratch.mit.edu/proxy/projects/"
+                + str(self.pid)
+                + "/loves/user/"
+                + self.username,
+                headers=self.headers,
+            ).json()
 
-    def getMessages(self):
-        print("https://api.scratch.mit.edu/users/" +
-              str(self.username)+"messages" + "/")
-        return requests.get("https://api.scratch.mit.edu/users/"+str(self.username)+"/messages" + "/", headers=self.headers).json()
+    class userSession:
+        def __init__(self, username):
+            self.headers = {
+                "x-csrftoken": "a",
+                "x-requested-with": "XMLHttpRequest",
+                "Cookie": "scratchcsrftoken=a;scratchlanguage=en;",
+                "referer": "https://scratch.mit.edu",
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36"
+            }
+            self.username = uname
+            self.uname2 = username
 
-    def getUserFollowerCount(self, user):
-        response = requests.get(
-            "https://scratchdb.lefty.one/v3/user/info/"+str(user)).json()
-        return response['statistics']['followers']
+        def followUser(self):
+            self.headers['referer'] = "https://scratch.mit.edu/users/" + \
+                str(self.username)+"/"
+            return requests.put(
+                "https://scratch.mit.edu/site-api/users/followers/"
+                + self.username
+                + "/add/?usernames="
+                + self.uname2,
+                headers=self.headers,
+            ).json()
 
-    def getUserStatus(self, user):
-        return requests.get("https://api.scratch.mit.edu/users/"+str(user)).json()['profile']['status']
+        def unfollowUser(self):
+            self.headers['referer'] = "https://scratch.mit.edu/users/" + \
+                str(self.username)+"/"
+            return requests.put(
+                "https://scratch.mit.edu/site-api/users/followers/"
+                + self.username
+                + "/remove/?usernames="
+                + self.uname2,
+                headers=self.headers,
+            ).json()
 
-    def getUserBio(self, user):
-        return requests.get("https://api.scratch.mit.edu/users/"+str(user)).json()['profile']['bio']
+        def toggleCommenting(self):
+            self.headers['referer'] = "https://scratch.mit.edu/users/" + \
+                str(self.username)
+            return requests.post(
+                "https://scratch.mit.edu/site-api/comments/user/" +
+                str(self.username)+"/toggle-comments/",
+                headers=self.headers,
+            )
 
-    def setCloudVar(self, variable, value):
-        try:
-            sendPacket({
+        def postComment(self,content, parent_id="", commentee_id=""):
+            self.headers['referer'] = "https://scratch.mit.edu/users/" + self.uname2
+            data = {
+                'content': content,
+                'parent_id': parent_id,
+                'commentee_id': commentee_id
+            }
+            return requests.post("https://scratch.mit.edu/site-api/comments/user/"+ self.uname2 +"/add/",data=json.dumps(data),headers=self.headers).json()
+
+    class user:
+        def __init__(self, user):
+            self.user = user
+            self.headers = {
+                "x-csrftoken": "a",
+                "x-requested-with": "XMLHttpRequest",
+                "Cookie": "scratchcsrftoken=a;scratchlanguage=en;",
+                "referer": "https://scratch.mit.edu",
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36"
+            }
+
+        def exists(self):
+            return requests.get("https://api.scratch.mit.edu/accounts/checkusername/"+str(self.user)).json() == {"username": self.user, "msg": "username exists"}
+
+        def getMessagesCount(self):
+            self.headers['referer'] = "https://scratch.mit.edu"
+            return requests.get("https://api.scratch.mit.edu/users/"+str(self.user)+"/messages/count").json()['count']
+
+        def getMessages(self):
+            return requests.get("https://api.scratch.mit.edu/users/"+str(self.user)+"/messages" + "/", headers=self.headers).json()
+
+        def getStatus(self):
+            return requests.get("https://api.scratch.mit.edu/users/"+str(self.user)).json()['profile']['status']
+
+        def getBio(self):
+            return requests.get("https://api.scratch.mit.edu/users/"+str(self.user)).json()['profile']['bio']
+
+        def getProjects(self):
+            r = requests.get(
+                "https://api.scratch.mit.edu/users/"+str(self.user)+"/projects")
+            data = r.json()
+            titles = []
+            for i in data:
+                x = i['title']
+                y = i['id']
+                titles.append('ID: ' + str(y))
+                titles.append('Title: ' + str(x))
+            return titles
+
+    class scratchConnect:
+        def __init__(self, pid):
+            global ws
+            global PROJECT_ID
+            self.username = uname
+            PROJECT_ID = pid
+            ws.connect('wss://clouddata.scratch.mit.edu', cookie='scratchsessionsid='+sessionId+';',
+                       origin='https://scratch.mit.edu', enable_multithread=True)
+            ws.send(json.dumps({
+                'method': 'handshake',
+                'user': self.username,
+                'project_id': str(pid)
+            }) + '\n')
+
+        def setCloudVar(self, variable, value):
+            try:
+                ws.send(json.dumps({
+                    'method': 'set',
+                    'name': '☁ ' + variable,
+                    'value': str(value),
+                    'user': self.username,
+                    'project_id': str(PROJECT_ID)
+                }) + '\n')
+            except BrokenPipeError:
+                logging.error('Broken Pipe Error. Connection Lost.')
+                ws.connect('wss://clouddata.scratch.mit.edu', cookie='scratchsessionsid='+sessionId+';',
+                           origin='https://scratch.mit.edu', enable_multithread=True)
+                ws.send(json.dumps({
+                    'method': 'handshake',
+                    'user': self.username,
+                    'project_id': str(PROJECT_ID)
+                }) + '\n')
+                logging.info('Re-connected to wss://clouddata.scratch.mit.edu')
+                logging.info('Re-sending the data')
+                ws.send(json.dumps({
+                    'method': 'set',
+                    'name': '☁ ' + variable,
+                    'value': str(value),
+                    'user': self.username,
+                    'project_id': str(PROJECT_ID)
+                }) + '\n')
+
+        def readCloudVar(self, name, limit="1000"):
+            try:
+                resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
+                                    str(PROJECT_ID)+"&limit="+str(limit)+"&offset=0").json()
+                return resp
+            except:
+                return 'Sorry, there was an error.'
+
+    class scratchDatabase:
+        def __init__(self, pid):
+            self.chars = """AabBCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789 -_`~!@#$%^&*()+=[];:'"\|,.<>/?}{"""
+            self.id = pid
+            self.username = uname
+            ws.connect('wss://clouddata.scratch.mit.edu', cookie='scratchsessionsid='+sessionId+';',
+                       origin='https://scratch.mit.edu', enable_multithread=True)
+            ws.send(json.dumps({
+                'method': 'handshake',
+                'user': self.username,
+                'project_id': str(self.id)
+            }) + '\n')
+
+        def __decode(self, text):
+            decoded = ""
+            text = str(text)
+            y = 0
+            for i in range(0, len(text)//2):
+                x = self.chars[int(str(text[y])+str(text[int(y)+1]))-1]
+                decoded = str(decoded)+str(x)
+                y += 2
+            return decoded
+
+        def __encode(self, text):
+            encoded = ""
+            length = int(len(text))
+            for i in range(0,length):
+                try:
+                    x = int(self.chars.index(text[i])+1)
+                    if x < 10:
+                        x = str(0)+str(x)
+                    encoded = encoded + str(x)
+                except ValueError:
+                    logging.error('Character not supported')
+            return encoded
+
+        def __setCloudVar(self, variable, value):
+            try:
+                ws.send(json.dumps({
+                    'method': 'set',
+                    'name': '☁ ' + variable,
+                    'value': str(value),
+                    'user': self.username,
+                    'project_id': str(self.id)
+                }) + '\n')
+            except BrokenPipeError:
+                logging.error('Broken Pipe Error. Connection Lost.')
+                ws.connect('wss://clouddata.scratch.mit.edu', cookie='scratchsessionsid='+sessionId+';',
+                           origin='https://scratch.mit.edu', enable_multithread=True)
+                ws.send(json.dumps({
+                    'method': 'handshake',
+                    'user': self.username,
+                    'project_id': str(self.id)
+                }) + '\n')
+                logging.info('Re-connected to wss://clouddata.scratch.mit.edu')
+                logging.info('Re-sending the data')
+                ws.send(json.dumps({
+                    'method': 'set',
+                    'name': '☁ ' + variable,
+                    'value': str(value),
+                    'user': self.username,
+                    'project_id': str(self.id)
+                }) + '\n')
+
+        def __readCloudVar(self, name, limit="1000"):
+            try:
+                resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
+                                    str(self.id)+"&limit="+str(limit)+"&offset=0").json()
+                for i in resp:
+                    x = i['name']
+                    if x == ('☁ ' + str(name)):
+                        return i['value']
+            except json.decoder.JSONDecodeError:
+                resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
+                                    str(self.id)+"&limit="+str(limit)+"&offset=0").json()
+                for i in resp:
+                    x = i['name']
+                    if x == ('☁ ' + str(name)):
+                        return i['value']
+
+        def startLoop(self):
+            data = []
+            while True:
+                encodedMethod = self.__readCloudVar('Method')
+                if encodedMethod != None:
+                    Method = self.__decode(encodedMethod)
+                if Method == "set":
+                    encodedSend = self.__readCloudVar('Send')
+                    Send = str(self.__decode(encodedSend))
+                    encodedVal = self.__readCloudVar('Data')
+                    Val = str(self.__decode(encodedVal))
+                    intVal = self.__decode(encodedVal)
+                    c = 0
+                    for i in Send:
+                        if str(i) in "1234567890":
+                            c = int(c)+1
+                    if c == len(Send):
+                        if int(Send) > len(data):
+                            if int(Send) == int(len(data))+1:
+                                data.append(intVal)
+                                logging.info('Data added.')
+                                tosend = self.__encode('Data added.')
+                                self.__setCloudVar('Return', tosend)
+                                self.__setCloudVar('Method', '')
+                            else:
+                                while len(data) != int(Send)-1:
+                                    data.append('none')
+                                data.append(intVal)
+                                logging.info('Data added.')
+                                tosend = self.__encode('Data added.')
+                                self.__setCloudVar('Return', tosend)
+                                self.__setCloudVar('Method', '')
+                        else:
+                            data.pop(int(Send)-1)
+                            data.insert(int(Send), intVal)
+                            logging.info('Data added.')
+                            tosend = self.__encode('Data added.')
+                            self.__setCloudVar('Return', tosend)
+                            self.__setCloudVar('Method', '')
+                    else:
+                        tosend = self.__encode(
+                            'Invalid input. Variable name must be int.')
+                        self.__setCloudVar('Return', tosend)
+                if Method == "get":
+                    encodedSend = self.__readCloudVar('Send')
+                    Send = self.__decode(encodedSend)
+                    c = 0
+                    for i in Send:
+                        if str(i) in "1234567890":
+                            c = int(c)+1
+                    if c == len(Send) and int(Send) > 0 and int(Send) < int(len(data))+1:
+                        tosend = self.__encode(data[int(Send)-1])
+                        self.__setCloudVar('Return', tosend)
+                        logging.info('Data sent.')
+                        self.__setCloudVar('Method', '')
+                    else:
+                        tosend = self.__encode('Invalid input.')
+                        self.__setCloudVar('Return', tosend)
+                if Method == "delete":
+                    encodedSend = self.__readCloudVar('Send')
+                    Send = self.__decode(encodedSend)
+                    c = 0
+                    for i in Send:
+                        if str(i) in "1234567890":
+                            c = int(c)+1
+                    if c == len(Send) and int(Send) > 0 and int(Send) < int(len(data))+1:
+                        data.pop(int(Send)-1)
+                        data.insert(int(Send)-1, 'none')
+                        logging.info('Variable deleted.')
+                        tosend = self.__encode('Variable deleted.')
+                        self.__setCloudVar('Return', tosend)
+                    else:
+                        tosend = self.__encode('Invalid input.')
+                        self.__setCloudVar('Return', tosend)
+
+    class turbowarpDatabase:
+        def __init__(self, pid):
+            self.chars = """AabBCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789 -_`~!@#$%^&*()+=[];:'"\|,.<>/?}{"""
+            self.id = pid
+            self.username = uname
+            ws.connect('wss://clouddata.turbowarp.org',
+                       origin='https://turbowarp.org', enable_multithread=True)
+            ws.send(json.dumps({
+                'method': 'handshake',
+                'user': self.username,
+                'project_id': str(self.id)
+            }) + '\n')
+
+        def __decode(self, text):
+            decoded = ""
+            text = str(text)
+            y = 0
+            for i in range(0, len(text)//2):
+                x = self.chars[int(str(text[y])+str(text[int(y)+1]))-1]
+                decoded = str(decoded)+str(x)
+                y += 2
+            return decoded
+
+        def __encode(self, text):
+            encoded = ""
+            length = int(len(text))
+            for i in range(0,length):
+                try:
+                    x = int(self.chars.index(text[i])+1)
+                    if x < 10:
+                        x = str(0)+str(x)
+                    encoded = encoded + str(x)
+                except ValueError:
+                    logging.error('Character not supported')
+            return encoded
+
+        def __readCloudVar(self, variable):
+            ws.send(json.dumps({
+                'method': 'get',
+                'project_id': str(turbowarpid)
+            }) + '\n')
+            data = ws.recv()
+            data = data.split('\n')
+            result = []
+            for i in data:
+                result.append(json.loads(i))
+            for i in result:
+                if i['name'] == '☁ ' + variable:
+                    return i['value']
+
+        def __setCloudVar(self, variable, value):
+            ws.send(json.dumps({
                 'method': 'set',
                 'name': '☁ ' + variable,
                 'value': str(value),
                 'user': self.username,
-                'project_id': str(PROJECT_ID)
-            })
-            time.sleep(0.1)
-        except BrokenPipeError:
-            logging.error('Broken Pipe Error. Connection Lost.')
-            ws.connect('wss://clouddata.scratch.mit.edu', cookie='scratchsessionsid='+self.sessionId+';',
-                       origin='https://scratch.mit.edu', enable_multithread=True)
-            sendPacket({
+                'project_id': str(turbowarpid)
+            }) + '\n')
+
+        def __readCloudVar(self, name, limit="1000"):
+            try:
+                resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
+                                    str(self.id)+"&limit="+str(limit)+"&offset=0").json()
+                for i in resp:
+                    x = i['name']
+                    if x == ('☁ ' + str(name)):
+                        return i['value']
+            except json.decoder.JSONDecodeError:
+                resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
+                                    str(self.id)+"&limit="+str(limit)+"&offset=0").json()
+                for i in resp:
+                    x = i['name']
+                    if x == ('☁ ' + str(name)):
+                        return i['value']
+
+        def startLoop(self):
+            data = []
+            while True:
+                encodedMethod = self.__readCloudVar('Method')
+                if encodedMethod != None:
+                    Method = self.__decode(encodedMethod)
+                if Method == "set":
+                    encodedSend = self.__readCloudVar('Send')
+                    Send = str(self.__decode(encodedSend))
+                    encodedVal = self.__readCloudVar('Data')
+                    Val = str(self.__decode(encodedVal))
+                    intVal = self.__decode(encodedVal)
+                    c = 0
+                    for i in Send:
+                        if str(i) in "1234567890":
+                            c = int(c)+1
+                    if c == len(Send):
+                        if int(Send) > len(data):
+                            if int(Send) == int(len(data))+1:
+                                data.append(intVal)
+                                logging.info('Data added.')
+                                tosend = self.__encode('Data added.')
+                                self.__setCloudVar('Return', tosend)
+                                self.__setCloudVar('Method', '')
+                            else:
+                                while len(data) != int(Send)-1:
+                                    data.append('none')
+                                data.append(intVal)
+                                logging.info('Data added.')
+                                tosend = self.__encode('Data added.')
+                                self.__setCloudVar('Return', tosend)
+                                self.__setCloudVar('Method', '')
+                        else:
+                            data.pop(int(Send)-1)
+                            data.insert(int(Send), intVal)
+                            logging.info('Data added.')
+                            tosend = self.__encode('Data added.')
+                            self.__setCloudVar('Return', tosend)
+                            self.__setCloudVar('Method', '')
+                    else:
+                        tosend = self.__encode(
+                            'Invalid input. Variable name must be int.')
+                        self.__setCloudVar('Return', tosend)
+                if Method == "get":
+                    encodedSend = self.__readCloudVar('Send')
+                    Send = self.__decode(encodedSend)
+                    c = 0
+                    for i in Send:
+                        if str(i) in "1234567890":
+                            c = int(c)+1
+                    if c == len(Send) and int(Send) > 0 and int(Send) < int(len(data))+1:
+                        tosend = self.__encode(data[int(Send)-1])
+                        self.__setCloudVar('Return', tosend)
+                        logging.info('Data sent.')
+                        self.__setCloudVar('Method', '')
+                    else:
+                        tosend = self.__encode('Invalid input.')
+                        self.__setCloudVar('Return', tosend)
+                if Method == "delete":
+                    encodedSend = self.__readCloudVar('Send')
+                    Send = self.__decode(encodedSend)
+                    c = 0
+                    for i in Send:
+                        if str(i) in "1234567890":
+                            c = int(c)+1
+                    if c == len(Send) and int(Send) > 0 and int(Send) < int(len(data))+1:
+                        data.pop(int(Send)-1)
+                        data.insert(int(Send)-1, 'none')
+                        logging.info('Variable deleted.')
+                        tosend = self.__encode('Variable deleted.')
+                        self.__setCloudVar('Return', tosend)
+                    else:
+                        tosend = self.__encode('Invalid input.')
+                        self.__setCloudVar('Return', tosend)
+
+    class turbowarpConnect:
+        def __init__(self, pid):
+            global ws
+            global turbowarpid
+            self.username = uname
+            turbowarpid = pid
+            ws.connect('wss://clouddata.turbowarp.org',
+                       origin='https://turbowarp.org', enable_multithread=True)
+            ws.send(json.dumps({
                 'method': 'handshake',
                 'user': self.username,
-                'project_id': str(PROJECT_ID)
-            })
-            time.sleep(0.1)
-            logging.info('Re-connected to wss://clouddata.scratch.mit.edu')
+                'project_id': str(turbowarpid)
+            }) + '\n')
 
-    def readCloudVar(self, name, limit=""):
-        if limit == "":
-            limit = 1000
-        resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
-                            str(PROJECT_ID)+"&limit="+str(limit)+"&offset=0").json()
-        for i in resp:
-            x = i['name']
-            if x == ('☁ ' + str(name)):
-                return i
-    
-    def readCloudVars(self, name, limit=""):
-        if limit == "":
-            limit = 1000
-        resp = requests.get("https://clouddata.scratch.mit.edu/logs?projectid=" +
-                            str(PROJECT_ID)+"&limit="+str(limit)+"&offset=0").json()
-        y = []
-        for i in resp:
-            x = i["name"]
-            if x == ('☁ ' + str(name)):
-                y.append(i)
-        return y
+        def setTurbowarpVar(self, variable, value):
+            ws.send(json.dumps({
+                'method': 'set',
+                'name': '☁ ' + variable,
+                'value': str(value),
+                'user': self.username,
+                'project_id': str(turbowarpid)
+            }) + '\n')
 
-    def cloudConnect(self, pid):
-        global ws
-        global PROJECT_ID
-        PROJECT_ID = pid
-        ws.connect('wss://clouddata.scratch.mit.edu', cookie='scratchsessionsid='+self.sessionId+';',
-                   origin='https://scratch.mit.edu', enable_multithread=True)
-        sendPacket({
-            'method': 'handshake',
-            'user': self.username,
-            'project_id': str(pid)
-        })
-
-
-def sendPacket(packet):
-    ws.send(json.dumps(packet) + '\n')
+        def readTurbowarpVar(self, variable):
+            ws.send(json.dumps({
+                'method': 'get',
+                'project_id': str(turbowarpid)
+            }) + '\n')
+            data = ws.recv()
+            data = data.split('\n')
+            result = []
+            for i in data:
+                result.append(json.loads(i))
+            for i in result:
+                if i['name'] == '☁ ' + variable:
+                    return i['value']
+            return 'Variable not found.'

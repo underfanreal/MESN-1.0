@@ -6,14 +6,17 @@ import time
 # POINT TO FILE(S) CONTAINING PLAINTEXT TOKENS
 GITHUB_ACCESS_TOKEN = str(open("github_access_token").read())
 NGROK_ACCESS_TOKEN = str(open("ngrok_access_token").read())
+# ENABLE ONLINE MODE?
+ENABLE_ONLINE = True
+
 # SPECIFY CLOUDLINK PORT
 PORT = 3000
 # SPECIFY BOT NAME (Will be GitHub'd as (name).txt in root of main)
-BOT_NAME = "meower"
+BOT_NAME = "dummy"
 # SPECIFY Message Of The Day
 MOTD = {
-    "enable": True,
-    "val": "This CloudLink Server is for use with Meower ONLY."
+    "enable": False,
+    "val": ""
 }
 
 def run_http_tunnel():
@@ -47,16 +50,17 @@ def update_serverbot_contents(content, comment):
 if __name__ == "__main__":
     # Instanciate CloudLink
     cl = CloudLink()
-    
-    # Authenticate GitHub with Access Token
-    g = Github(GITHUB_ACCESS_TOKEN)
+    if ENABLE_ONLINE:
+        print("[ i ] Online mode!")
+        # Authenticate GitHub with Access Token
+        g = Github(GITHUB_ACCESS_TOKEN)
 
-    # Authenticate ngrok with Access Token
-    ngrok.set_auth_token(NGROK_ACCESS_TOKEN)
-    
-    http_tunnel_str = ""
-    run_http_tunnel()
-    update_serverbot_contents(str("wss://"+http_tunnel_str), "Server started on local port {0}".format(PORT))
+        # Authenticate ngrok with Access Token
+        ngrok.set_auth_token(NGROK_ACCESS_TOKEN)
+        
+        http_tunnel_str = ""
+        run_http_tunnel()
+        update_serverbot_contents(str("wss://"+http_tunnel_str), "Server started on local port {0}".format(PORT))
     try:
         cl.host(PORT)
         if MOTD["enable"]:
@@ -67,6 +71,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         cl.stop()
     time.sleep(1)
-    ngrok.kill()
-    update_serverbot_contents("E:SERVER_OFFLINE", "Server terminated by CTRL+C")
+    if ENABLE_ONLINE:
+        ngrok.kill()
+        update_serverbot_contents("E:SERVER_OFFLINE", "Server terminated by CTRL+C")
     print("Exiting now...")
