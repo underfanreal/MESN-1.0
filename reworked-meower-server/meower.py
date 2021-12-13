@@ -22,6 +22,11 @@ Dependencies:
 * bcrypt
 * scratch2py
 
+Notes:
+1. Server has implemented Trusted Access, to gain trust on the server send over the "meower" key
+2. Basic working concept of direct server-to-client and client-to-client comms
+3. Not ready for deployment
+
 """
 class files: # Storage API for... well... storing things.
     def __init__(self):
@@ -217,7 +222,7 @@ class meower(files, security): # Meower Server itself
         if runAuth:
             if autoAuth:
                 try:
-                    os.system("cls && echo Please wait...")
+                    os.system("clear && echo Please wait...")
                     self.s2py = Scratch2Py(str(SCRATCH_UNAME), str(SCRATCH_PSWD))
                     self.authenticator = self.s2py.scratchConnect("561076533")
                     print("Session ready.")
@@ -226,7 +231,7 @@ class meower(files, security): # Meower Server itself
                     sys.exit()
             else:
                 try: # Authenticate session for use with verifying Scratchers using 2-Factor Authentication           
-                    os.system("cls && echo Please login to Scratch to start 2-Factor Authenticator.")
+                    os.system("clear && echo Please login to Scratch to start 2-Factor Authenticator.")
                     self.s2py = Scratch2Py(str(input("Enter your Scratch username: ")), str(input("Enter password: ")))
                     self.authenticator = self.s2py.scratchConnect("561076533")
                     print("Session ready.")
@@ -238,7 +243,8 @@ class meower(files, security): # Meower Server itself
         self.cl.callback("on_close", self.on_close)
         self.cl.callback("on_connect", self.on_connect)
         self.cl.trustedAccess(True, [
-            "meower"
+            "81ihjregfoi32hfi1hv8o78yfor3hgu8o1fy8q9uoryf1879y8t19o3vygc8w94y84c790cgc1", # Meower Trust Key 1
+            "aijfgdqherikgjrheq13n1g831rgojkgfe089uvh10ctiug8t1i3u4t8x1u384y83u8196u3x8" # Tnix's server key
         ])
     
         self.cl.loadIPBlocklist([
@@ -246,8 +252,8 @@ class meower(files, security): # Meower Server itself
         ])
     
         self.cl.setMOTD("Meower Social Media Platform - Prototype Server", enable=True)
-        os.system("cls && echo Meower Social Media Platform - Prototype Server")
-        self.cl.server()
+        os.system("clear && echo Meower Social Media Platform - Prototype Server")
+        self.cl.server(port=3001)
     
     def get_client_statedata(self, client): # "steals" information from the CloudLink module to get better client data
         if type(client) == str:
@@ -336,6 +342,7 @@ class meower(files, security): # Meower Server itself
                     if self.get_client_statedata(id)["authed"] == False:
                         # Get the current authentication username list
                         auths = self.authenticator.readCloudVar(10)
+                        #print(auths)
                         # Create temporary variables for handling the authentication
                         tmp_auths = []
                         user_authed = False
@@ -361,6 +368,11 @@ class meower(files, security): # Meower Server itself
                                             # Get out of this loop and return data back to the client
                                             user_authed = True
                                             user_valid_id = request["user"]
+                                            
+                                            # Check for clients that are trying to steal the ID and kick em' / Disconnect other sessions
+                                            if user_valid_id in self.cl.getUsernames():
+                                                print("detected someone trying to use the username {0} wrongly".format(user_valid_id))
+                                                self.cl.kickClient(user_valid_id)
                                             break
                             else:
                                 print("Error: Client memory object not found")
@@ -376,7 +388,7 @@ class meower(files, security): # Meower Server itself
                                 self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["KeyNotFound"], "id": message["id"]})
                             
                         else:
-                            print("Error")
+                            print("Error: Auths is not a list")
                             self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
                     else:
                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]}) 
