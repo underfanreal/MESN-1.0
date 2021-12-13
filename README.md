@@ -3,11 +3,10 @@ Meower is a social media platform written in Scratch 3.0 and Python, ported to H
 
 ### [Try Beta 4.6](https://meower.org/Meower)
 
-## Changelog for 4.6
-1. Start implementation of BlueList & Removal of deprecated phrase selection system
-2. New posts will no longer cause the entire screen to scroll down
-3. Search menu minor modifications
-4. Miscellaneous fixes
+## Changelog for 4.7
+1. Removed bluelist
+2. Server and client upgraded to the latest build of CloudLink
+3. Fixed some security vulnerabilities
 
 ## Viewing/Running the source
 1. Download the source code file (*.sb3)
