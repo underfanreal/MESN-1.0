@@ -243,8 +243,7 @@ class meower(files, security): # Meower Server itself
         self.cl.callback("on_close", self.on_close)
         self.cl.callback("on_connect", self.on_connect)
         self.cl.trustedAccess(True, [
-            "81ihjregfoi32hfi1hv8o78yfor3hgu8o1fy8q9uoryf1879y8t19o3vygc8w94y84c790cgc1", # Meower Trust Key 1
-            "aijfgdqherikgjrheq13n1g831rgojkgfe089uvh10ctiug8t1i3u4t8x1u384y83u8196u3x8" # Tnix's server key
+            "meower" # DO NOT USE THIS KEY IN PRODUCTION
         ])
     
         self.cl.loadIPBlocklist([
