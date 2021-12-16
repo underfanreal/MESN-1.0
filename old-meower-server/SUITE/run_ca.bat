@@ -1,0 +1,2 @@
+python cloudaccount.py
+pause
