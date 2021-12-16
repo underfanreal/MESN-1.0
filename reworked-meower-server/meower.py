@@ -14,7 +14,7 @@ SCRATCH_PSWD = "" # PUT SCRATCH PASSWORD HERE, DO NOT SHARE IN PRODUCTION
 
 """
 
-Meower Social Media Platform - Prototype Server
+Meower Social Media Platform - Server Source Code
 
 Dependencies:
 * CloudLink >=0.1.7.4
@@ -22,15 +22,9 @@ Dependencies:
 * bcrypt
 * scratch2py
 
-Notes:
-1. Server has implemented Trusted Access, to gain trust on the server send over the "meower" key
-2. Basic working concept of direct server-to-client and client-to-client comms
-3. Not ready for deployment
-
 """
 class files: # Storage API for... well... storing things.
     def __init__(self):
-        self.init_files()
         self.dirpath = os.path.dirname(os.path.abspath(__file__)) + "/Meower"
         self.defaultsecparams = {
             "isHidden": False,
@@ -50,8 +44,7 @@ class files: # Storage API for... well... storing things.
             "./Meower/Storage/Categories/Home",
             "./Meower/Storage/Categories/Announcements",
             "./Meower/Storage/Categories/Threads",
-            "./Meower/Userdata",
-            "./Meower/Config"
+            "./Meower/Userdata"
         ]:
             try:
                 os.mkdir(directory)
@@ -162,6 +155,7 @@ class files: # Storage API for... well... storing things.
 class security: # Security API for generating/checking passwords, creating session tokens and authentication codes
     def __init__(self):
         self.bc = bcrypt
+        self.fs = files()
         print("Security class ready.")
     
     def create_pswd(self, password, strength=15): # bcrypt hashes w/ salt, TODO: add pepper and use a stronger default strength
@@ -202,10 +196,93 @@ class security: # Security API for generating/checking passwords, creating sessi
             output += random.choice('0123456789')
         return output
 
+    def read_user_account(self, username): # Reads the contents of the username's account. Returns true if the account exists and has been read back correctly.
+        if type(username) == str:
+            result, dirlist = self.fs.lsdir("/Userdata/")
+            if result:
+                if str(username + ".json") in dirlist: # Read back the userfile
+                    result2, payload = self.fs.read("/Userdata/" + str(username + ".json"))
+                    if result2:
+                        try:
+                            return True, json.loads(payload)
+                        except json.decoder.JSONDecodeError:
+                            print(('Error while decoding user "{0}"'+"'s json data").format(username))
+                            return False, None
+                    else:
+                        return False, None
+                else:
+                    return False, True
+            else:
+                return False, None
+        else:
+            return False, None
+    
+    def write_user_account(self, username, new_data): # Returns true if the account does not exist and has been generated successfully.
+        if type(username) == str:
+            result, dirlist = self.fs.lsdir("/Userdata/")
+            if result:
+                if str(username + ".json") in dirlist:
+                    if type(new_data) == dict:
+                        result2 = self.fs.write("/Userdata/", str(username + ".json"), json.dumps(new_data))
+                        if result2:
+                            pass
+                        else:
+                            print("Account modify err")
+                        return True, result2 # Both true - Account modified OK, if result is false - Server error
+                    else:
+                        print("Account modifier datatype error")
+                        return False, False # The datatype is not valid
+                else:
+                    print("Account does not exist")
+                    return False, True # Account does not exist
+            else:
+                print("Account server error")
+                return False, False # Server error
+        else:
+            print("Account server error")
+            return False, False # Server error
+    
+    def gen_user_account(self, username): # Returns true if the account does not exist and has been generated successfully.
+        if type(username) == str:
+            result, dirlist = self.fs.lsdir("/Userdata/")
+            if result:
+                if not str(username + ".json") in dirlist:
+                    tmp = {
+                        "user_settings": {
+                            "theme": "orange",
+                            "mode": True,
+                            "sfx": True,
+                            "debug": False,
+                            "bgm": True,
+                            "bgm_song": "Voxalice - Percussion bass loop"
+                        },
+                        "user_data": {
+                            "pfp_type": "",
+                            "pfp_data": ""
+                        },
+                        "lvl": "", # Account level, 0:Normal member, 1:Admin, 2:On-Watch
+                        "quote": "", # User's quote
+                        "pswd": "", # STORE ONLY SALTED HASHES FOR PASSWORD, DO NOT STORE PLAINTEXT OR UNSALTED HASHES
+                        "email": "" # TODO: Add an Email bot for account recovery
+                    }
+                    result2 = self.fs.write("/Userdata/", str(username + ".json"), json.dumps(tmp))
+                    if result2:
+                        pass
+                    else:
+                        print("Account gen err")
+                    return True, result2 # Both true - Account generated OK, if result is false - Server error
+                else:
+                    return False, True # Account exists
+            else:
+                print("Account server error")
+                return False, False # Server error
+        else:
+            print("Account server error")
+            return False, False # Server error
+
 class meower(files, security): # Meower Server itself
     def __init__(self, debug=False, autoAuth=False, runAuth=True, ignoreUnauthedBlanks=False):
         self.cl = CloudLink(debug=debug)
-        
         self.ignoreUnauthedBlanks = ignoreUnauthedBlanks
         
         # Add custom status codes to CloudLink
@@ -214,15 +291,21 @@ class meower(files, security): # Meower Server itself
         self.cl.codes["GettingReady"] = "I:012 | Getting ready"
         self.cl.codes["ObsoleteClient"] = "I:013 | Client is out-of-date"
         self.cl.codes["Pong"] = "I:014 | Pong"
+        self.cl.codes["IDExists"] = "I:015 | Account exists"
+        self.cl.codes["2FAOnly"] = "I:016 | 2FA Required"
         
+        clear_cmd = "cls" # Change for os-specific console clear
         # Instanciate the other classes into Meower
         self.fs = files()
         self.secure = security()
         
+        # init the filesystem
+        self.fs.init_files()
+        
         if runAuth:
             if autoAuth:
                 try:
-                    os.system("clear && echo Please wait...")
+                    os.system(clear_cmd+" && echo Please wait...")
                     self.s2py = Scratch2Py(str(SCRATCH_UNAME), str(SCRATCH_PSWD))
                     self.authenticator = self.s2py.scratchConnect("561076533")
                     print("Session ready.")
@@ -231,7 +314,7 @@ class meower(files, security): # Meower Server itself
                     sys.exit()
             else:
                 try: # Authenticate session for use with verifying Scratchers using 2-Factor Authentication           
-                    os.system("clear && echo Please login to Scratch to start 2-Factor Authenticator.")
+                    os.system(clear_cmd+"&& echo Please login to Scratch to start 2-Factor Authenticator.")
                     self.s2py = Scratch2Py(str(input("Enter your Scratch username: ")), str(input("Enter password: ")))
                     self.authenticator = self.s2py.scratchConnect("561076533")
                     print("Session ready.")
@@ -251,8 +334,8 @@ class meower(files, security): # Meower Server itself
         ])
     
         self.cl.setMOTD("Meower Social Media Platform - Prototype Server", enable=True)
-        os.system("clear && echo Meower Social Media Platform - Prototype Server")
-        self.cl.server(port=3001)
+        os.system(clear_cmd+" && echo Meower Social Media Platform - Prototype Server")
+        self.cl.server()
     
     def get_client_statedata(self, client): # "steals" information from the CloudLink module to get better client data
         if type(client) == str:
@@ -294,10 +377,10 @@ class meower(files, security): # Meower Server itself
                 return False
     
     def on_close(self, client): # TODO: Write code that can tell clients that someone has disconnected
-        print("Client disconnected:", client["id"])
+        #print("Client disconnected:", client["id"])
+        pass
     
     def on_connect(self, client): # TODO: Write code that can tell clients that someone has connected
-        print("Client connected:", client["id"])
         self.modify_client_statedata(client, "authtype", "")
         self.modify_client_statedata(client, "authed", False)
     
@@ -312,6 +395,7 @@ class meower(files, security): # Meower Server itself
             clienttype = 1
         if "cmd" in message:    
             cmd = message["cmd"]
+            
             # TODO: Add ratelimiter and IP anti-spam blocker
             # TODO: Implement a password-based authentication system that doesn't suck a duck
             """if cmd == "block":
@@ -323,25 +407,92 @@ class meower(files, security): # Meower Server itself
                 self.cl.unblockIP(message["val"])
                 print("Unblocking IP", ip)
                 self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})"""
+            
+            # General networking stuff
+            
             if cmd == "ping":
-                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Pong"]})
+                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Pong"], "id": id})
+            
+            # Security and account stuff
+            
+            elif cmd == "authpswd":
+                if (self.get_client_statedata(id)["authtype"] == "") or (self.get_client_statedata(id)["authtype"] == "pswd"):
+                    if not self.get_client_statedata(id)["authed"]:
+                        if type(val) == dict:
+                            result, payload = self.secure.read_user_account(val["username"])
+                            if result:
+                                hashed_pswd = payload["pswd"]
+                                if not hashed_pswd == "":
+                                    self.modify_client_statedata(id, "authtype", "pswd")
+                                    valid_auth = self.secure.check_pswd(val["pswd"], hashed_pswd)
+                                    #print(valid_auth)
+                                    if valid_auth:
+                                        print("{0} is authed".format(val["username"]))
+                                        self.modify_client_statedata(id, "authtype", "pswd")
+
+                                        # The client is authed
+                                        self.modify_client_statedata(id, "authed", True)
+
+                                        payload2 = {
+                                            "mode": "auth",
+                                            "payload": {
+                                                "username": val["username"]
+                                            }
+                                        }
+
+                                        self.cl.sendPacket({"cmd": "direct", "val": payload2, "id": message["id"]})
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                                    else:
+                                        print("{0} not authed".format(val["username"]))
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["PasswordInvalid"], "id": message["id"]})
+                                else:
+                                    print("{0} not authed: Attempted to sign into an account created with 2FA".format(val["username"]))
+                                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["2FAOnly"], "id": message["id"]})
+                            else:
+                                if type(payload) == bool:
+                                    print("{0} not found in accounts".format(val["username"]))
+                                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["IDNotFound"], "id": message["id"]})
+                                else:
+                                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
+                        else:
+                            self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Datatype"], "id": message["id"]})
+                    else:
+                        print("{0} is already authed".format(id))
+                        payload2 = {
+                            "mode": "auth",
+                            "payload": {
+                                "username": val["username"]
+                            }
+                        }
+                        self.cl.sendPacket({"cmd": "direct", "val": payload2, "id": message["id"]})
+                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                else:
+                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+            
             elif cmd == "auth2fa":
-                # Generate a new authentication key
-                keygen = self.secure.gen_key()
-                
-                # Modify client's memory object to store the key for authentication
-                self.modify_client_statedata(id, "authtype", "2fa")
-                self.modify_client_statedata(id, "key", str(keygen))
-                
-                # Send a status code and the key to the client
-                self.cl.sendPacket({"cmd": "direct", "val": str(keygen), "id": message["id"]})
-                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                if (self.get_client_statedata(id)["authtype"] == "") or (self.get_client_statedata(id)["authtype"] == "2fa"):
+                    if not "key" in self.get_client_statedata(id):
+                        # Generate a new authentication key
+                        keygen = self.secure.gen_key()
+                        
+                        # Modify client's memory object to store the key for authentication
+                        self.modify_client_statedata(id, "authtype", "2fa")
+                        self.modify_client_statedata(id, "key", str(keygen))
+                        
+                        # Send a status code and the key to the client
+                        self.cl.sendPacket({"cmd": "direct", "val": {"mode": "auth", "payload": str(keygen)}, "id": message["id"]})
+                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                    elif not self.get_client_statedata(id)["key"] == "":
+                        # Resend the keygen
+                        self.cl.sendPacket({"cmd": "direct", "val": {"mode": "auth", "payload": str(self.get_client_statedata(id)["key"])}, "id": message["id"]})
+                else:
+                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+            
             elif cmd == "checkauth":
                 if self.get_client_statedata(id)["authtype"] == "2fa":
                     if self.get_client_statedata(id)["authed"] == False:
                         # Get the current authentication username list
                         auths = self.authenticator.readCloudVar(10)
-                        #print(auths)
                         # Create temporary variables for handling the authentication
                         tmp_auths = []
                         user_authed = False
@@ -372,6 +523,7 @@ class meower(files, security): # Meower Server itself
                                             if user_valid_id in self.cl.getUsernames():
                                                 print("detected someone trying to use the username {0} wrongly".format(user_valid_id))
                                                 self.cl.kickClient(user_valid_id)
+                                            
                                             break
                             else:
                                 print("Error: Client memory object not found")
@@ -381,29 +533,142 @@ class meower(files, security): # Meower Server itself
                             # Tell the client that it has a valid id or not
                             if user_authed:
                                 #print(self.get_client_statedata(id))
-                                self.cl.sendPacket({"cmd": "direct", "val": {"username": str(user_valid_id)}, "id": message["id"]})
-                                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                                
+                                # Generate an account for the user if not made
+                                result, code = self.secure.gen_user_account(user_valid_id)
+                                #print(result, code)
+                                if result:
+                                    if code:
+                                        print("{0} is authed w/ new account generated".format(user_valid_id))
+                                        self.cl.sendPacket({"cmd": "direct", "val": {"mode": "auth", "payload": {"username": str(user_valid_id), "is_new": True}}, "id": message["id"]})
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                                    else:
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
+                                else:
+                                    if code:
+                                        print("{0} is authed".format(user_valid_id))
+                                        self.cl.sendPacket({"cmd": "direct", "val": {"mode": "auth", "payload": {"username": str(user_valid_id), "is_new": False}}, "id": message["id"]})
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                                    else:
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
                             else:
                                 self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["KeyNotFound"], "id": message["id"]})
                             
                         else:
-                            print("Error: Auths is not a list")
+                            print("Error")
                             self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
                     else:
                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]}) 
                 else:
                     self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
             
-            # File storage implementation
+            elif cmd == "get_profile":
+                if (self.get_client_statedata(id)["authed"]) or (self.ignoreUnauthedBlanks):
+                    if clienttype == 1:
+                        if type(val) == str:
+                            result, payload = self.secure.read_user_account(val)
+                            if result: # Format message for meower
+                                payload.pop("pswd") # Remove the password hash from message (why the duck would we want to send back the password)
+                                if str(val) != str(id): # Purge sensitive data if the specified ID isn't the same
+                                    payload.pop("user_settings") # Remove the user's settings
+                                    payload.pop("email") # Remove the user's email
+                                payload = {
+                                    "mode": "profile",
+                                    "payload": payload
+                                }
+                            if result:
+                                self.cl.sendPacket({"cmd": "direct", "val": payload, "id": message["id"]})
+                                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                            else:
+                                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["IDNotFound"], "id": message["id"]})
+                        else:
+                            self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Datatype"], "id": message["id"]})
+                    else:
+                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+                else:
+                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+            
+            elif cmd == "gen_account":
+                if (((self.get_client_statedata(id)["authtype"] == "") and (not self.get_client_statedata(id)["authed"])) or ((self.get_client_statedata(id)["authtype"] == "2fa") and (self.get_client_statedata(id)["authed"]))):
+                    if clienttype == 1:
+                        # Generate the user account
+                        result, code = self.secure.gen_user_account(id)
+                        if result and code:
+                            
+                            # Since the account was just created, add auth info, if the account was made using a password then generate hash and store it
+                            if (not self.get_client_statedata(id)["authtype"] == "") or (not self.get_client_statedata(id)["authtype"] == "2fa"):
+                                if type(val) == str:
+                                    
+                                    # Generate a hash for the password
+                                    hashed_pswd = self.secure.create_pswd(val)
+                                    
+                                    # Store the hash in the account's file
+                                    result, payload = self.secure.read_user_account(id)
+                                    
+                                    if result:
+                                        payload["pswd"] = hashed_pswd
+                                        result2, code2 = self.secure.write_user_account(id, payload)
+                                        if result2:
+                                            payload2 = {
+                                                "mode": "auth",
+                                                "payload": ""
+                                            }
+                                            
+                                            self.cl.sendPacket({"cmd": "direct", "val": payload2, "id": message["id"]})
+                                            self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                                        else:
+                                            self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
+                                    else:
+                                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
+                                else:
+                                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Syntax"], "id": message["id"]})
+                            
+                        else:
+                            if (not result) and code:
+                                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["IDExists"], "id": message["id"]})
+                            else:
+                                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
+                    else:
+                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["IDRequired"], "id": message["id"]})
+                else:
+                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+            
+            elif cmd == "update_config":
+                if (self.get_client_statedata(id)["authed"]) or (self.ignoreUnauthedBlanks):
+                    if clienttype == 1:
+                        if type(val) == dict:
+                            result, payload = self.secure.read_user_account(id)
+                            if result: # Format message for meower
+                                #print(payload)
+                                #print(val)
+                                for config in val:
+                                    #print(config, val[config])
+                                    if config in payload:
+                                        payload[config] = val[config]
+                                #print(payload)
+                                result2, payload2 = self.secure.write_user_account(id, payload)
+                                if result2:
+                                    payload3 = {
+                                        "mode": "cfg",
+                                        "payload": ""
+                                    }
+                                    self.cl.sendPacket({"cmd": "direct", "val": payload3, "id": message["id"]})
+                                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
+                            else:
+                                self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["IDNotFound"], "id": message["id"]})
+                        else:
+                            self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Datatype"], "id": message["id"]})
+                    else:
+                        self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+                else:
+                    self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["Refused"], "id": message["id"]})
+            
+            # General chat stuff
             
             elif cmd == "set_livechat_state":
                 if (self.get_client_statedata(id)["authed"]) or (self.ignoreUnauthedBlanks):
-                    print(val)
-                    
                     if "mode" in val:
                         if type(val["mode"]) == int:
-                            print('Relaying livechat state "{0}"'.format(val))
-                            
                             state = {
                                 "mode": val["mode"]
                             }
@@ -430,8 +695,6 @@ class meower(files, security): # Meower Server itself
                     
                     # Run word filter against post data
                     post = profanity.censor(val)
-                    
-                    print('Relaying livechat message "{0}"'.format(post))
                     
                     # Attach metadata to post
                     post_w_metadata = {
@@ -472,8 +735,6 @@ class meower(files, security): # Meower Server itself
                     
                     # Run word filter against post data
                     post = profanity.censor(val)
-                    
-                    print('Creating post {0} with message "{1}"'.format(post_id, post))
                     
                     # Attach metadata to post
                     post_w_metadata = {
@@ -525,9 +786,15 @@ class meower(files, security): # Meower Server itself
             
             elif cmd == "get_post":
                 if (self.get_client_statedata(id)["authed"]) or (self.ignoreUnauthedBlanks):
-                    print("Downloading post {0}".format(val))
                     # Check for posts in storage
                     result, payload = self.fs.read("/Storage/Posts/" + val)
+                    
+                    if result: # Format message for meower
+                        payload = {
+                            "mode": "post",
+                            "payload": json.loads(payload)
+                        }
+                    
                     if result:
                         self.cl.sendPacket({"cmd": "direct", "val": payload, "id": message["id"]})
                         self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["OK"], "id": message["id"]})
@@ -538,8 +805,14 @@ class meower(files, security): # Meower Server itself
             
             elif cmd == "get_home":
                 if (self.get_client_statedata(id)["authed"]) or (self.ignoreUnauthedBlanks):
-                    print("Sending over homepage")
                     status, payload = self.get_home()
+                    
+                    if status != 0: # Format message for meower
+                        payload = {
+                            "mode": "home",
+                            "payload": payload
+                        }
+                    
                     if status == 0: # Home error
                         print("Error while generating homepage")
                         self.cl.sendPacket({"cmd": "statuscode", "val": self.cl.codes["InternalServerError"], "id": message["id"]})
