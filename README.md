@@ -26,4 +26,4 @@ The source code for beta 4.8 can be opened with [TurboWarp](https://turbowarp.or
 3. Follow the instructions above to load the source code.
 4. Make changes (Use GitHub Desktop to upload large files).
 5. Make a pull request, and explain the changes you made.
-6. If it gets approved, the source code will be merged.
+6. If it gets approved, the source code will be merged here.
