@@ -1,2 +1,0 @@
-python clouddisk.py
-pause

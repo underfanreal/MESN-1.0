@@ -1,2 +1,0 @@
-python cloudaccount.py
-pause
