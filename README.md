@@ -31,6 +31,7 @@ The source code for [beta 4.8](https://github.com/meower-media-co/Meower-Vanilla
 1. Fork the repository.
 2. Create a new branch.
 3. Follow the instructions above to load the source code.
-4. Make changes (Use GitHub Desktop to upload large files).
-5. Make a pull request, and explain the changes you made.
-6. If it gets approved, the source code will be merged here.
+4. Make changes.
+5. Commit and push your changes.
+6. Make a pull request, and explain the changes you made.
+7. If it gets approved, the source code will be merged here.
