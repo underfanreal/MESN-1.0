@@ -17,7 +17,7 @@ The source code for [beta 4.8](https://github.com/meower-media-co/Meower-Vanilla
 ### Opening the source with a diffrent editor
 1. Download the source code file (*.sb3)
 2. Load a compatible Scratch editor.
-4. Load CloudLink (This isn't nesseary if you're using Adacraft.)
+4. Load CloudLink (This isn't necessary if you're using Adacraft.)
 5. Open the source code file.
 
 #### Compatible editors:
