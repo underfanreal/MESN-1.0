@@ -7,10 +7,10 @@ Meower is a social media platform written in Scratch 3.0 and Python, ported to H
 1. Added Login/Signup with Meower options.
 
 ## Changelog for Beta 5 Preview 1.3 (Load the [build](https://github.com/meower-media-co/Meower-Vanilla/blob/main/Meower%20Beta%205%20Preview%201.3.sb3) in [Turbowarp](https://turbowarp.org/editor?extension=https://mikedev101.github.io/cloudlink/B3-0.js&fps=250&clones=Infinity&offscreen&limitless&hqpen&size=640x360&turbo))
-1. removed scratch login
-2. bugfix for IP error
-3. profile icons render now
-4. max render of 25 posts
+1. Removed scratch login
+2. Bugfix for IP error
+3. Profile icons render now
+4. Max render of 25 posts
 
 ## Viewing/Running the source
 The source code for [beta 4.8](https://github.com/meower-media-co/Meower-Vanilla/blob/main/Meower%20Beta%20Test%204.8.sb3) can be opened with [TurboWarp](https://turbowarp.org/editor?extension=https://mikedev101.github.io/cloudlink/B3-0.js).
