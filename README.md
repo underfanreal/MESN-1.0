@@ -6,11 +6,12 @@ Meower is a social media platform written in Scratch 3.0 and Python, ported to H
 ## Changelog for Beta 4.8 ([current build](https://app.meower.org))
 1. Added Login/Signup with Meower options.
 
-## Changelog for Beta 5 Preview 1.3 (Load the [build](https://github.com/meower-media-co/Meower-Vanilla/blob/main/Meower%20Beta%205%20Preview%201.3.sb3) in [TurboWarp](https://turbowarp.org/editor?extension=https://mikedev101.github.io/cloudlink/B3-0.js&fps=250&clones=Infinity&offscreen&limitless&hqpen&size=640x360&turbo))
-1. Removed scratch login
-2. Bugfix for IP error
-3. Profile icons render now
-4. Max render of 25 posts
+## Changelog for Beta 5 Preview 1.4 (Load the [build](https://turbowarp.org/editor?clones=Infinity&offscreen&limitless&hqpen&fps=250&size=640x360&turbo)
+1. Complete overhaul for networking code - Now runs on CloudLink TURBO
+2. Bug fixes
+3. Speed optimizations
+4. Framework for the GUI is complete
+Note: To get the Beta 5 source code to load correctly, you will need to have the CloudLink TURBO extension JS injected into the editor. You can simply get a JS Injector extension for your browser and add [this file's contents](https://raw.githubusercontent.com/MikeDev101/cloudlink/master/B3-0.js) as a rule for "turbowarp.org/*".
 
 ## Viewing/Running the source
 The source code for [beta 4.8](https://github.com/meower-media-co/Meower-Vanilla/blob/main/Meower%20Beta%20Test%204.8.sb3) can be opened with [TurboWarp](https://turbowarp.org/editor?extension=https://mikedev101.github.io/cloudlink/B3-0.js).
