@@ -212,7 +212,7 @@
         videoProvider: vm.runtime.ioDevices.video.provider
       };
 
-      scaffolding.setUsername("player####".replace(/#/g, () => Math.floor(Math.random() * 10)));
+      scaffolding.setUsername("meower_user".replace(/#/g, () => Math.floor(Math.random() * 10)));
       scaffolding.setAccentColor("#ff4c4c");
 
       scaffolding.addCloudProvider(new Scaffolding.Cloud.LocalStorageProvider("cloudvariables:"));
@@ -311,8 +311,8 @@
         }
       }
 
-      vm.setTurboMode(false);
-      if (vm.setInterpolation) vm.setInterpolation(true);
+      vm.setTurboMode(true);
+      if (vm.setInterpolation) vm.setInterpolation(false);
       if (vm.setFramerate) vm.setFramerate(250);
       if (vm.renderer.setUseHighQualityRender) vm.renderer.setUseHighQualityRender(true);
       if (vm.setRuntimeOptions) vm.setRuntimeOptions({
@@ -513,7 +513,7 @@
 					"arguments": {
 						"ADDRESS": {
 							"type": "string",
-							"defaultValue": 'ws://192.168.86.208:3000/',
+							"defaultValue": 'ws://127.0.0.1:3000/',
 						},
 					},
                 },
