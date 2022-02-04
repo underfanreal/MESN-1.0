@@ -8,13 +8,10 @@ Meower-Vanilla is the original, Scratch-based client for Meower. It runs on Turb
 
 ## Changelog for the [current build](https://app.meower.org)
 
-1. 16:9 Aspect ratio support.
-2. Deprecation of BBCode+ Engine.
-3. Upgrade to Stamp Font Engine++.
-4. Major code structure revisions.
-5. Bugfixes.
-6. Performance enhancements.
-7. Networking code was modified to use CloudLink TURBO.
+1. HTTP based post fetching
+2. Add server repair mode checks
+3. Fix moderator level checks
+4. Clears account cache when pressing the logout button
 
 ## How do I view/load/edit the source code?
 
