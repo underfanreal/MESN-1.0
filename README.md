@@ -11,6 +11,7 @@ Meower-Vanilla is the original, Scratch-based client for Meower. It runs on Turb
 1. HTTP based post fetching
 2. Add server repair mode checks
 3. Fix moderator level checks
+4. Clears account cache when pressing the logout button
 
 ## How do I view/load/edit the source code?
 
